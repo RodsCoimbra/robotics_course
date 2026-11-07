@@ -107,8 +107,27 @@ class BatteryMonitorLifecycleNode : public rclcpp_lifecycle::LifecycleNode
 public:
     BatteryMonitorLifecycleNode() : LifecycleNode("battery_monitor")
     {
-        declare_parameter<std::string>("battery_topic", "/battery_state");
-        declare_parameter<std::string>("status_topic", "/battery_monitor/status");
+        declare_parameter<std::string>(
+            "battery_topic",
+            "/battery_state");
+        declare_parameter<std::string>(
+            "status_topic",
+            "/battery_monitor/status");
+        declare_parameter<double>(
+            "low_battery_threshold",
+            20.0);
+
+        declare_parameter<double>(
+            "critical_battery_threshold",
+            10.0);
+
+        declare_parameter<int>(
+            "status_qos_depth",
+            1);
+
+        declare_parameter<bool>(
+            "publish_transient_local",
+            true);
     }
 
 private:
@@ -118,10 +137,44 @@ private:
     {
         battery_topic = get_parameter("battery_topic").as_string();
         status_topic = get_parameter("status_topic").as_string();
-
+        low_battery_threshold_ = get_parameter("low_battery_threshold").as_double();
+        critical_battery_threshold_ = get_parameter("critical_battery_threshold").as_double();
+        const int status_qos_depth = get_parameter("status_qos_depth").as_int();
+        const bool publish_transient_local = get_parameter("publish_transient_local").as_bool();
         if (battery_topic.empty() || status_topic.empty())
         {
             RCLCPP_ERROR(this->get_logger(), "One of the topic was empty.");
+            return CallbackReturn::FAILURE;
+        }
+
+        if (!std::isfinite(low_battery_threshold_) ||
+            !std::isfinite(critical_battery_threshold_))
+        {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Battery thresholds must be finite.");
+
+            return CallbackReturn::FAILURE;
+        }
+
+        if (critical_battery_threshold_ < 0.0 ||
+            low_battery_threshold_ > 100.0 ||
+            critical_battery_threshold_ > low_battery_threshold_)
+        {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Thresholds must satisfy: "
+                "0 <= critical <= low <= 100.");
+
+            return CallbackReturn::FAILURE;
+        }
+
+        if (status_qos_depth <= 0)
+        {
+            RCLCPP_ERROR(
+                get_logger(),
+                "status_qos_depth must be greater than zero.");
+
             return CallbackReturn::FAILURE;
         }
 
@@ -196,6 +249,8 @@ private:
 
     std::string battery_topic;
     std::string status_topic;
+    double low_battery_threshold_{20.0};
+    double critical_battery_threshold_{10.0};
     BatteryMonitor battery_monitor_;
     rclcpp::Subscription<sensor_msgs::msg::BatteryState>::SharedPtr battery_subscription_;
     rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr status_publisher_;

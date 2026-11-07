@@ -1,0 +1,10 @@
+battery_monitor:
+  ros__parameters:
+    battery_topic: "/battery_state"
+    status_topic: "/battery_monitor/status"
+
+    low_battery_threshold: 20.0
+    critical_battery_threshold: 10.0
+
+    status_qos_depth: 1
+    publish_transient_local: true
